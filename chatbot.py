@@ -137,12 +137,15 @@ def chatbot(net, sess, chars, vocab, max_length, beam_width, relevance, temperat
                 forward_args={'relevance':relevance, 'mask_reset_token':vocab['\n'], 'forbidden_token':vocab['>'],
                                 'temperature':temperature, 'topn':topn})
             out_chars = []
+            whole_sentence = ""
             for i, char_token in enumerate(computer_response_generator):
                 out_chars.append(chars[char_token])
-                print(possibly_escaped_char(out_chars), end='', flush=True)
+                print(possibly_escaped_char(out_chars), end='', flush=True) # This is where we can send this back to hipchat
+                whole_sentence = whole_sentence + chars[char_token] # This is where we can send this back to hipchat
                 states = forward_text(net, sess, states, relevance, vocab, chars[char_token])
                 if i >= max_length: break
             states = forward_text(net, sess, states, relevance, vocab, sanitize_text(vocab, "\n> "))
+            print("\n" + whole_sentence)
 
 def process_user_command(user_input, states, relevance, temperature, topn, beam_width):
     user_command_entered = False
