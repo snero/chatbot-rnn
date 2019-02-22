@@ -36,6 +36,8 @@ def main():
                        'higher is more pressure, 0.4 is probably as high as it can go without'
                        'noticeably degrading coherence;'
                        'set to <0 to disable relevance masking')
+    parser.add_argument('--say', type=str, default="hello",
+                        help="what do say")
     args = parser.parse_args()
     sample_main(args)
 
@@ -81,7 +83,7 @@ def sample_main(args):
         print("Restoring weights...")
         saver.restore(sess, model_path)
         chatbot(net, sess, chars, vocab, args.n, args.beam_width,
-                args.relevance, args.temperature, args.topn)
+                args.relevance, args.temperature, args.topn, args.say)
 
 def initial_state(net, sess):
     # Return freshly initialized model states.
@@ -122,14 +124,13 @@ def possibly_escaped_char(raw_chars):
                 return backspace_seq + new_seq + "".join([' '] * diff_length) + "".join(['\b'] * diff_length)
     return raw_chars[-1]
 
-def chatbot(net, sess, chars, vocab, max_length, beam_width, relevance, temperature, topn):
+#API here
+def chatbot(net, sess, chars, vocab, max_length, beam_width, relevance, temperature, topn, user_input):
     states = initial_state_with_relevance_masking(net, sess, relevance)
-    while True:
-        user_input = input('\n> ')
-        user_command_entered, reset, states, relevance, temperature, topn, beam_width = process_user_command(
-            user_input, states, relevance, temperature, topn, beam_width)
-        if reset: states = initial_state_with_relevance_masking(net, sess, relevance)
-        if not user_command_entered:
+    user_command_entered, reset, states, relevance, temperature, topn, beam_width = process_user_command(
+      user_input, states, relevance, temperature, topn, beam_width)
+    if reset: states = initial_state_with_relevance_masking(net, sess, relevance)
+    if not user_command_entered:
             states = forward_text(net, sess, states, relevance, vocab, sanitize_text(vocab, "> " + user_input + "\n>"))
             computer_response_generator = beam_search_generator(sess=sess, net=net,
                 initial_state=copy.deepcopy(states), initial_sample=vocab[' '],
