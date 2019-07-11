@@ -1,107 +1,69 @@
-#!flask/bin/python
-from flask import Flask, jsonify, abort, request, make_response, url_for
-from flask_httpauth import HTTPBasicAuth
+from flask import Flask, jsonify, request
+from multiprocessing import Value
 
-app = Flask(__name__, static_url_path = "")
-auth = HTTPBasicAuth()
+counter = Value('i', 0)
+app = Flask(__name__)
 
-@auth.get_password
-def get_password(username):
-    if username == 'miguel':
-        return 'python'
-    return None
+a = []
+help_message = """
+API Usage:
+ 
+- GET    /api/list
+- POST   /api/add data={"key": "value"}
+- GET    /api/get/<id>
+- PUT    /api/update/<id> data={"key": "value_to_replace"}
+- DELETE /api/delete/<id> 
 
-@auth.error_handler
-def unauthorized():
-    return make_response(jsonify( { 'error': 'Unauthorized access' } ), 403)
-    # return 403 instead of 401 to prevent browsers from displaying the default auth dialog
-    
-@app.errorhandler(400)
-def not_found(error):
-    return make_response(jsonify( { 'error': 'Bad request' } ), 400)
+"""
 
-@app.errorhandler(404)
-def not_found(error):
-    return make_response(jsonify( { 'error': 'Not found' } ), 404)
+def id_generator():
+    with counter.get_lock():
+        counter.value += 1
+        return counter.value
 
-tasks = [
-    {
-        'id': 1,
-        'title': u'Buy groceries',
-        'description': u'Milk, Cheese, Pizza, Fruit, Tylenol', 
-        'done': False
-    },
-    {
-        'id': 2,
-        'title': u'Learn Python',
-        'description': u'Need to find a good Python tutorial on the web', 
-        'done': False
-    }
-]
+@app.route('/api', methods=['GET'])
+def help():
+    return help_message
 
-def make_public_task(task):
-    new_task = {}
-    for field in task:
-        if field == 'id':
-            new_task['uri'] = url_for('get_task', task_id = task['id'], _external = True)
-        else:
-            new_task[field] = task[field]
-    return new_task
-    
-@app.route('/todo/api/v1.0/tasks', methods = ['GET'])
-@auth.login_required
-def get_tasks():
-    return jsonify( { 'tasks': map(make_public_task, tasks) } )
+@app.route('/api/list', methods=['GET'])
+def list():
+    return jsonify(a)
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods = ['GET'])
-@auth.login_required
-def get_task(task_id):
-    task = filter(lambda t: t['id'] == task_id, tasks)
-    if len(task) == 0:
-        abort(404)
-    return jsonify( { 'task': make_public_task(task[0]) } )
+@app.route('/api/add', methods=['POST'])
+def index():
+    payload = request.json
+    payload['id'] = id_generator()
+    a.append(payload)
+    return "Created: {} \n".format(payload)
 
-@app.route('/todo/api/v1.0/tasks', methods = ['POST'])
-@auth.login_required
-def create_task():
-    if not request.json or not 'title' in request.json:
-        abort(400)
-    task = {
-        'id': tasks[-1]['id'] + 1,
-        'title': request.json['title'],
-        'description': request.json.get('description', ""),
-        'done': False
-    }
-    tasks.append(task)
-    return jsonify( { 'task': make_public_task(task) } ), 201
+@app.route('/api/get', methods=['GET'])
+def get_none():
+    return 'ID Required: /api/get/<id> \n'
 
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods = ['PUT'])
-@auth.login_required
-def update_task(task_id):
-    task = filter(lambda t: t['id'] == task_id, tasks)
-    if len(task) == 0:
-        abort(404)
-    if not request.json:
-        abort(400)
-    if 'title' in request.json and type(request.json['title']) != unicode:
-        abort(400)
-    if 'description' in request.json and type(request.json['description']) is not unicode:
-        abort(400)
-    if 'done' in request.json and type(request.json['done']) is not bool:
-        abort(400)
-    task[0]['title'] = request.json.get('title', task[0]['title'])
-    task[0]['description'] = request.json.get('description', task[0]['description'])
-    task[0]['done'] = request.json.get('done', task[0]['done'])
-    return jsonify( { 'task': make_public_task(task[0]) } )
-    
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods = ['DELETE'])
-@auth.login_required
-def delete_task(task_id):
-    task = filter(lambda t: t['id'] == task_id, tasks)
-    if len(task) == 0:
-        abort(404)
-    tasks.remove(task[0])
-    return jsonify( { 'result': True } )
-    
+@app.route('/api/get/<int:_id>', methods=['GET'])
+def get(_id):
+    for user in a:
+        if _id == user['id']:
+            selected_user = user
+    return jsonify(selected_user)
+
+@app.route('/api/update', methods=['PUT'])
+def update_none():
+    return 'ID and Desired K/V in Payload required: /api/update/<id> -d \'{"name": "john"}\' \n'
+
+@app.route('/api/update/<int:_id>', methods=['PUT'])
+def update(_id):
+    update_req = request.json
+    key_to_update = update_req.keys()[0]
+    update_val = (item for item in a if item['id'] == _id).next()[key_to_update] = update_req.values()[0]
+    update_resp = (item for item in a if item['id'] == _id).next()
+    return "Updated: {} \n".format(update_resp)
+
+@app.route('/api/delete/<int:_id>', methods=['DELETE'])
+def delete(_id):
+    deleted_user = (item for item in a if item['id'] == _id).next()
+    a.remove(deleted_user)
+    return "Deleted: {} \n".format(deleted_user)
+
 if __name__ == '__main__':
-    app.run(debug = True)
+    app.run()
