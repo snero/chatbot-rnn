@@ -34,7 +34,7 @@ def index():
     payload = request.json
     payload['id'] = id_generator()
     a.append(payload)
-    return "Created: {} \n".format(payload)
+    return "{} \n".format(payload)
 
 @app.route('/api/get', methods=['GET'])
 def get_none():
